@@ -2,12 +2,7 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any, Dict, Optional, Sequence, Set, Type, Union
 
-from fastapi._compat import (  # noqa: F401
-    ModelField,
-    Undefined,
-    field_annotation_is_scalar_sequence,
-    sequence_annotation_to_type,
-)
+from fastapi._compat import ModelField
 from fastapi.utils import create_cloned_field
 from pydantic import BaseModel, ConfigDict, create_model
 from pydantic.version import VERSION as PYDANTIC_VERSION
@@ -97,6 +92,9 @@ if PYDANTIC_V2:
         return model.model_config.get(name, default)
 
 else:
+    from fastapi._compat import (  # noqa: F401
+    sequence_annotation_to_type,
+    )
     from pydantic import (
         BaseSettings,  # noqa: F401
         root_validator,
