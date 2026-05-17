@@ -389,7 +389,10 @@ class SqlalchemyCrud(
 
     def list_item(self, values: Dict[str, Any]) -> SchemaListT:
         """Parse the database data query result dictionary into schema_list."""
-        return self.schema_list.parse_obj(values)
+        if PYDANTIC_V2:
+            return self.schema_list.model_validate(values)
+        else:
+            return self.schema_list.parse_obj(values)
 
     def _fetch_item_scalars(self, session: Session, item_id: Iterable[str]) -> List[TableModelT]:
         sel = select(self.model).where(self.pk.in_(list(map(get_python_type_parse(self.pk), item_id))))
@@ -447,7 +450,10 @@ class SqlalchemyCrud(
         return super().schema_name_prefix
 
     async def on_create_pre(self, request: Request, obj: SchemaCreateT, **kwargs) -> Dict[str, Any]:
-        data = obj.dict(by_alias=True)  # exclude=set(self.pk)
+        if PYDANTIC_V2:
+            data = obj.model_dump(by_alias=True)  # exclude=set(self.pk)
+        else:
+            data = obj.dict(by_alias=True)  # exclude=set(self.pk)
         if self.pk_name in data and not data.get(self.pk_name):
             del data[self.pk_name]
         return data
@@ -459,12 +465,18 @@ class SqlalchemyCrud(
         item_id: Union[List[str], List[int]],
         **kwargs,
     ) -> Dict[str, Any]:
-        data = obj.dict(exclude=self.update_exclude, exclude_unset=True, by_alias=True)
+        if PYDANTIC_V2:
+            data = obj.model_dump(exclude=self.update_exclude, exclude_unset=True, by_alias=True)
+        else:
+            data = obj.dict(exclude=self.update_exclude, exclude_unset=True, by_alias=True)
         data = {key: val for key, val in data.items() if val is not None or field_allow_none(model_fields(self.model)[key])}
         return data
 
     async def on_filter_pre(self, request: Request, obj: Optional[SchemaFilterT], **kwargs) -> Dict[str, Any]:
-        return obj and {k: v for k, v in obj.dict(exclude_unset=True, by_alias=True).items() if v is not None}
+        if PYDANTIC_V2:
+            return obj and {k: v for k, v in obj.model_dump(exclude_unset=True, by_alias=True).items() if v is not None}
+        else:
+            return obj and {k: v for k, v in obj.dict(exclude_unset=True, by_alias=True).items() if v is not None}
 
     async def on_list_after(self, request: Request, result: Result, data: ItemListSchema, **kwargs) -> ItemListSchema:
         """Parse the database data query result dictionary into schema_list."""

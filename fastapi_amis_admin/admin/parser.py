@@ -29,6 +29,7 @@ from fastapi_amis_admin.utils.pydantic import (
     model_fields,
     scalar_sequence_inner_type,
     smart_deepcopy,
+    pydantic_model_dump
 )
 from fastapi_amis_admin.utils.translation import i18n as _
 
@@ -98,7 +99,8 @@ class AmisParser:
         if column.type in ["switch", "mapping"]:
             column.sortable = False
         if quick_edit:
-            column.quickEdit = self.as_form_item(modelfield, set_default=True).dict(
+            column.quickEdit = pydantic_model_dump(
+                self.as_form_item(modelfield, set_default=True),
                 exclude_none=True, by_alias=True, exclude={"name", "label"}
             )
             column.quickEdit.update({"saveImmediately": True})

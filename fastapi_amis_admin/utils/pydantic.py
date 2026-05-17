@@ -1,9 +1,7 @@
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Dict, Optional, Sequence, Set, Type, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type, Union
 
-from fastapi._compat import ModelField
-from fastapi.utils import create_cloned_field
 from pydantic import BaseModel, ConfigDict, create_model
 from pydantic.version import VERSION as PYDANTIC_VERSION
 from typing_extensions import Annotated, get_args, get_origin
@@ -11,6 +9,7 @@ from typing_extensions import Annotated, get_args, get_origin
 PYDANTIC_V2 = PYDANTIC_VERSION.startswith("2.")
 # todo: Deprecated `dict`,`json`,`from_orm`,`parse_obj` methods in pydantic v2
 if PYDANTIC_V2:
+    from fastapi._compat import ModelField
     from pydantic._internal._utils import ValueItems  # noqa: F401
     from pydantic.v1.datetime_parse import parse_date, parse_datetime  # noqa: F401
     from pydantic.v1.utils import deep_update, lenient_issubclass, smart_deepcopy  # noqa: F401
@@ -19,6 +18,20 @@ if PYDANTIC_V2:
     GenericModel = BaseModel
     from pydantic import model_validator
     from pydantic.v1.typing import is_literal_type, is_none_type, is_union
+    
+    # Try to import sequence_annotation_to_type from fastapi._compat
+    try:
+        from fastapi._compat import sequence_annotation_to_type  # noqa: F401
+    except ImportError:
+        # Fallback for older FastAPI versions that don't provide this in v2 mode
+        sequence_annotation_to_type = {
+            list: list,
+            List: list,
+            tuple: tuple,
+            Tuple: tuple,
+            set: set,
+            frozenset: frozenset,
+        }  # Will skip the check in annotation_outer_type()
 
     class AllowExtraModelMixin(BaseModel):
         model_config = ConfigDict(extra="allow")
@@ -92,6 +105,7 @@ if PYDANTIC_V2:
         return model.model_config.get(name, default)
 
 else:
+    from fastapi.utils import create_cloned_field
     from fastapi._compat import (  # noqa: F401
     sequence_annotation_to_type,
     )
@@ -214,6 +228,29 @@ def validator_skip_blank(v, type_: type):
     return v
 
 
+def pydantic_model_dump(model: BaseModel, **kwargs) -> Dict[str, Any]:
+    """Compatibility wrapper for model.dict() (Pydantic v1) and model.model_dump() (Pydantic v2)"""
+    if PYDANTIC_V2:
+        return model.model_dump(**kwargs)
+    else:
+        return model.dict(**kwargs)
+
+
+def pydantic_model_dump_json(model: BaseModel, **kwargs) -> str:
+    """Compatibility wrapper for model.json() (Pydantic v1) and model.model_dump_json() (Pydantic v2)"""
+    if PYDANTIC_V2:
+        return model.model_dump_json(**kwargs)
+    else:
+        return model.json(**kwargs)
+
+
+def pydantic_model_validate(model: Type[BaseModel], obj: Any, **kwargs) -> BaseModel:
+    """Compatibility wrapper for model.parse_obj() (Pydantic v1) and model.model_validate() (Pydantic v2)"""
+    if PYDANTIC_V2:
+        return model.model_validate(obj, **kwargs)
+    else:
+        return model.parse_obj(obj)
+
 def root_validator_skip_blank(cls, values: Dict[str, Any]):
     fields = model_fields(cls)
 
@@ -246,5 +283,10 @@ def create_model_by_model(
         keys &= include
     if exclude:
         keys -= exclude
-    fields = {name: create_cloned_field(field) for name, field in fields.items() if name in keys}
+    if PYDANTIC_V2:
+        # In Pydantic v2, create_cloned_field doesn't exist, just use the fields directly
+        fields = {name: field for name, field in fields.items() if name in keys}
+    else:
+        # In Pydantic v1, clone the fields to avoid modifying the original model
+        fields = {name: create_cloned_field(field) for name, field in fields.items() if name in keys}
     return create_model_by_fields(name, list(fields.values()), set_none=set_none, **kwargs)

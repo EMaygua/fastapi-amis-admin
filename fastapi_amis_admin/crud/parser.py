@@ -10,8 +10,7 @@ if version("fastapi") > "0.112.2":
     from fastapi.utils import create_model_field as create_response_field
 else:
     from fastapi.utils import create_response_field
-from fastapi.utils import create_cloned_field
-from pydantic import BaseConfig, BaseModel
+from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 from sqlalchemy import Column, String, Table
 from sqlalchemy.engine import Row
@@ -28,6 +27,10 @@ from fastapi_amis_admin.utils.pydantic import (
     parse_date,
     parse_datetime,
 )
+
+if not PYDANTIC_V2:
+    from fastapi.utils import create_cloned_field
+    from pydantic import BaseConfig
 
 SqlaInsAttr = Union[str, InstrumentedAttribute]
 SqlaField = Union[SqlaInsAttr, Label]
@@ -67,9 +70,9 @@ class ModelFieldProxy:
         self.__dict__["_update"][key] = value
 
     def cloned_field(self):
-        modelfield = create_cloned_field(self.__dict__["_modelfield"])
+        kwargs = self.__dict__["_update"]
         if PYDANTIC_V2:
-            kwargs = self.__dict__["_update"]
+            modelfield = self.__dict__["_modelfield"]
             name = kwargs.pop("name", modelfield.name)
             alias = kwargs.get("alias", None)
             if alias:
@@ -78,9 +81,11 @@ class ModelFieldProxy:
             field_info = FieldInfo.merge_field_infos(modelfield.field_info, **kwargs)
             field_info.annotation = modelfield.field_info.annotation
             return ModelField(field_info=field_info, name=name, mode=modelfield.mode)
-        for k, v in self.__dict__["_update"].items():
-            setattr(modelfield, k, v)
-        return modelfield
+        else:
+            modelfield = create_cloned_field(self.__dict__["_modelfield"])
+            for k, v in kwargs.items():
+                setattr(modelfield, k, v)
+            return modelfield
 
 
 class TableModelParser:
@@ -336,8 +341,13 @@ def parse_obj_to_schema(obj: TableModelT, schema: Type[SchemaT], refresh: bool =
     if refresh:
         object_session(obj).refresh(obj)
     orm_mode = model_config_attr(schema, "orm_mode", False) or model_config_attr(schema, "from_attributes", False)
-    parse = schema.from_orm if orm_mode else schema.parse_obj
-    return parse(obj)
+    if PYDANTIC_V2:
+        # Pydantic v2: use model_validate with from_attributes parameter
+        return schema.model_validate(obj, from_attributes=orm_mode)
+    else:
+        # Pydantic v1: use parse_obj or from_orm
+        parse = schema.from_orm if orm_mode else schema.parse_obj
+        return parse(obj)
 
 
 def insfield_to_modelfield(insfield: InstrumentedAttribute) -> Optional[ModelField]:

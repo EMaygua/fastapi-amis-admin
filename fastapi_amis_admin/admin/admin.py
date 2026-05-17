@@ -78,7 +78,8 @@ from fastapi_amis_admin.crud.utils import (
     parser_str_set_list,
 )
 from fastapi_amis_admin.utils.functools import cached_property
-from fastapi_amis_admin.utils.pydantic import ModelField, annotation_outer_type, create_model_by_model, deep_update, model_fields
+from fastapi_amis_admin.utils.pydantic import ModelField, annotation_outer_type, create_model_by_model, deep_update, model_fields, pydantic_model_dump
+
 from fastapi_amis_admin.utils.translation import i18n as _
 
 BaseAdminT = TypeVar("BaseAdminT", bound="BaseAdmin")
@@ -672,7 +673,7 @@ class ModelAdmin(SqlalchemyCrud, BaseActionAdmin):
         if not isinstance(item, (dict, BaseModel)):
             return None
         if isinstance(item, BaseModel):
-            item = item.dict(exclude_none=True, by_alias=True, exclude={"name", "label"})
+            item = pydantic_model_dump(item, exclude_none=True, by_alias=True, exclude={"name", "label"})
         item.update({"saveImmediately": True})
         if item.get("type") == "switch":
             item.update({"mode": "inline"})

@@ -18,6 +18,7 @@ from starlette.types import Receive, Scope, Send
 
 from fastapi_amis_admin.crud import BaseApiOut
 from fastapi_amis_admin.utils.translation import i18n as _
+from fastapi_amis_admin.utils.pydantic import pydantic_model_dump
 
 
 def register_exception_handlers(app: FastAPI, **kwargs):
@@ -51,7 +52,7 @@ class JSONResponseWithException(JSONResponse):
 def make_error_response(status: int, msg="", *, exc: Exception = None, **extra):
     """Construct an error response"""
     result = BaseApiOut(status=status, msg=msg, **extra)
-    return JSONResponseWithException(content=result.dict(), exc=exc)
+    return JSONResponseWithException(content=pydantic_model_dump(result), exc=exc)
 
 
 async def http_exception_handler(request: Request, exc: HTTPException):

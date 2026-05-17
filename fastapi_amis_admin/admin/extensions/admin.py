@@ -14,9 +14,8 @@ from fastapi_amis_admin.crud.base import ItemListSchema, SchemaCreateT, SchemaFi
 from fastapi_amis_admin.crud.parser import TableModelT
 from fastapi_amis_admin.crud.schema import CrudEnum
 from fastapi_amis_admin.utils.functools import cached_property
-from fastapi_amis_admin.utils.pydantic import ModelField
+from fastapi_amis_admin.utils.pydantic import ModelField, pydantic_model_dump
 from fastapi_amis_admin.utils.translation import i18n as _
-
 
 class ReadOnlyModelAdmin(ModelAdmin):
     """只读模型管理Mixin
@@ -203,7 +202,7 @@ class BaseAuthFieldModelAdmin(ModelAdmin):
         """Parse the database data query result dictionary into schema_list."""
         exclude = await self.get_deny_fields(request, "list")  # 过滤没有权限的字段
         data = await super().on_list_after(request, result, data, **kwargs)
-        data.items = [item.dict(exclude=exclude) for item in data.items]  # 过滤没有权限的字段
+        data.items = [pydantic_model_dump(item, exclude=exclude) for item in data.items]  # 过滤没有权限的字段
         return data
 
     async def on_filter_pre(self, request: Request, obj: Optional[SchemaFilterT], **kwargs) -> Dict[str, Any]:
